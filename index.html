@@ -142,16 +142,37 @@
         <h2 class="section-title">To-Do List</h2>
 
         <form id="todo-form" class="todo-form" novalidate>
-          <input
-            type="text"
-            id="task-input"
-            class="input-text input-task"
-            placeholder="What do you need to do?"
-            aria-label="New task input"
-            maxlength="200"
-            required
-          >
-          <button type="submit" class="btn btn-add">+ Add Task</button>
+          <div class="todo-form-main">
+            <input
+              type="text"
+              id="task-input"
+              class="input-text input-task"
+              placeholder="What do you need to do?"
+              aria-label="New task input"
+              maxlength="200"
+              required
+            >
+            <button type="submit" class="btn btn-add">+ Add Task</button>
+          </div>
+          <div class="todo-form-extras">
+            <div class="form-group-inline">
+              <label for="task-priority" class="form-label-sm">Priority</label>
+              <select id="task-priority" class="input-select" aria-label="Task priority">
+                <option value="medium" selected>🟡 Medium</option>
+                <option value="high">🔴 High</option>
+                <option value="low">🟢 Low</option>
+              </select>
+            </div>
+            <div class="form-group-inline">
+              <label for="task-due" class="form-label-sm">Due date</label>
+              <input
+                type="date"
+                id="task-due"
+                class="input-date"
+                aria-label="Task due date (optional)"
+              >
+            </div>
+          </div>
         </form>
 
         <div class="todo-meta">

@@ -225,6 +225,9 @@ function initTheme() {
    M5 — TO-DO LIST
    Responsibilities:
      • Add tasks with duplicate prevention
+     • Priority: high / medium / low (colour-coded left border + badge)
+     • Due date: optional, highlights overdue and due-today tasks
+     • Sort: overdue → high → medium → low, done tasks last
      • Render the filtered task list to the DOM
      • Mark tasks complete / incomplete (toggle)
      • Inline edit a task (click Edit → input appears → Save)
@@ -235,44 +238,57 @@ function initTheme() {
      • Load tasks from LocalStorage on page load
 
    Data shape (array stored as JSON):
-     tasks = [{ id: string, text: string, done: boolean }, ...]
+     tasks = [{
+       id:       string,
+       text:     string,
+       done:     boolean,
+       priority: 'high' | 'medium' | 'low',
+       dueDate:  string | ''   (ISO date yyyy-mm-dd or empty)
+     }, ...]
 ========================================================== */
 
 /* --- LocalStorage key --- */
 const TODO_KEY = 'ld_tasks';
 
 /* --- State --- */
-let tasks       = [];          // single source of truth
-let activeFilter = 'all';      // 'all' | 'active' | 'completed'
+let tasks        = [];   // single source of truth
+let activeFilter = 'all'; // 'all' | 'active' | 'completed'
 
 /* --- DOM references --- */
-const todoForm    = $('#todo-form');
-const taskInput   = $('#task-input');
-const taskList    = $('#task-list');
-const taskCountEl = $('#task-count');
-const emptyState  = $('#empty-state');
-const filterBtns  = document.querySelectorAll('.btn-filter');
+const todoForm      = $('#todo-form');
+const taskInput     = $('#task-input');
+const taskPriority  = $('#task-priority');
+const taskDue       = $('#task-due');
+const taskList      = $('#task-list');
+const taskCountEl   = $('#task-count');
+const emptyState    = $('#empty-state');
+const filterBtns    = document.querySelectorAll('.btn-filter');
+
+/* --- Priority config --- */
+const PRIORITY_CONFIG = {
+  high:   { emoji: '🔴', label: 'High',   order: 1 },
+  medium: { emoji: '🟡', label: 'Medium', order: 2 },
+  low:    { emoji: '🟢', label: 'Low',    order: 3 },
+};
 
 /* ----------------------------------------------------------
    LocalStorage helpers
 ---------------------------------------------------------- */
-
-/**
- * Save the tasks array to LocalStorage as a JSON string.
- */
 function saveTasksToStorage() {
   localStorage.setItem(TODO_KEY, JSON.stringify(tasks));
 }
 
-/**
- * Read and parse tasks from LocalStorage.
- * Returns an empty array if nothing is saved or data is corrupt.
- * @returns {Array<{id: string, text: string, done: boolean}>}
- */
 function loadTasksFromStorage() {
   try {
     const raw = localStorage.getItem(TODO_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    return JSON.parse(raw).map((t) => ({
+      id:       t.id       || generateId(),
+      text:     t.text     || '',
+      done:     t.done     ?? false,
+      priority: t.priority || 'medium',
+      dueDate:  t.dueDate  || '',
+    }));
   } catch {
     return [];
   }
@@ -280,13 +296,7 @@ function loadTasksFromStorage() {
 
 /* ----------------------------------------------------------
    ID generator
-   Uses Date.now() + a random suffix — simple and collision-safe
-   for a client-side app with a single user.
 ---------------------------------------------------------- */
-/**
- * Generate a unique string ID.
- * @returns {string}
- */
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -294,13 +304,6 @@ function generateId() {
 /* ----------------------------------------------------------
    Duplicate detection
 ---------------------------------------------------------- */
-/**
- * Check if a task with the same text already exists.
- * Comparison is case-insensitive and trims whitespace.
- * @param {string} text
- * @param {string|null} excludeId - skip this id (used during edit)
- * @returns {boolean}
- */
 function isDuplicate(text, excludeId = null) {
   const normalised = text.trim().toLowerCase();
   return tasks.some(
@@ -309,49 +312,94 @@ function isDuplicate(text, excludeId = null) {
 }
 
 /* ----------------------------------------------------------
-   Core CRUD operations
-   Each one mutates `tasks`, saves to storage, then re-renders.
+   Due-date helpers
 ---------------------------------------------------------- */
 
 /**
- * Add a new task.
- * Validates: not empty, not duplicate.
- * @param {string} text
- * @returns {boolean} true if added, false if rejected
+ * Return today's date as an ISO string yyyy-mm-dd in local time.
+ * Using toLocaleDateString avoids UTC offset surprises.
+ * @returns {string}
  */
-function addTask(text) {
-  const trimmed = text.trim();
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
+/**
+ * Classify a due date string relative to today.
+ * @param {string} dueDate  ISO yyyy-mm-dd or ''
+ * @returns {'overdue'|'today'|'upcoming'|'none'}
+ */
+function dueDateStatus(dueDate) {
+  if (!dueDate) return 'none';
+  const today = todayISO();
+  if (dueDate < today) return 'overdue';
+  if (dueDate === today) return 'today';
+  return 'upcoming';
+}
+
+/**
+ * Format a due date for display.
+ * @param {string} dueDate
+ * @returns {string}
+ */
+function formatDueDate(dueDate) {
+  if (!dueDate) return '';
+  const [y, m, d] = dueDate.split('-');
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/* ----------------------------------------------------------
+   Sorting
+   Order: overdue undone → high undone → medium undone →
+          low undone → done tasks (in original add order)
+---------------------------------------------------------- */
+function sortTasks(list) {
+  return [...list].sort((a, b) => {
+    /* Done tasks always sink to the bottom */
+    if (a.done !== b.done) return a.done ? 1 : -1;
+
+    /* Among undone: overdue first */
+    const aOver = !a.done && dueDateStatus(a.dueDate) === 'overdue';
+    const bOver = !b.done && dueDateStatus(b.dueDate) === 'overdue';
+    if (aOver !== bOver) return aOver ? -1 : 1;
+
+    /* Then by priority */
+    const aPri = PRIORITY_CONFIG[a.priority]?.order ?? 2;
+    const bPri = PRIORITY_CONFIG[b.priority]?.order ?? 2;
+    return aPri - bPri;
+  });
+}
+
+/* ----------------------------------------------------------
+   Core CRUD
+---------------------------------------------------------- */
+function addTask(text, priority, dueDate) {
+  const trimmed = text.trim();
   if (!trimmed) {
     showInputError(taskInput, 'Task cannot be empty.');
     return false;
   }
-
   if (isDuplicate(trimmed)) {
     showInputError(taskInput, '⚠️ This task already exists.');
     return false;
   }
-
-  tasks.push({ id: generateId(), text: trimmed, done: false });
+  tasks.push({ id: generateId(), text: trimmed, done: false, priority, dueDate });
   saveTasksToStorage();
   renderTasks();
   return true;
 }
 
-/**
- * Delete a task by id.
- * @param {string} id
- */
 function deleteTask(id) {
   tasks = tasks.filter((t) => t.id !== id);
   saveTasksToStorage();
   renderTasks();
 }
 
-/**
- * Toggle the done state of a task by id.
- * @param {string} id
- */
 function toggleComplete(id) {
   const task = tasks.find((t) => t.id === id);
   if (task) {
@@ -361,27 +409,16 @@ function toggleComplete(id) {
   }
 }
 
-/**
- * Save an edited task text.
- * Validates: not empty, not duplicate (ignoring itself).
- * @param {string} id
- * @param {string} newText
- * @param {HTMLElement} editInput - the input element (for error display)
- * @returns {boolean} true if saved
- */
 function saveEdit(id, newText, editInput) {
   const trimmed = newText.trim();
-
   if (!trimmed) {
     showInputError(editInput, 'Task cannot be empty.');
     return false;
   }
-
   if (isDuplicate(trimmed, id)) {
     showInputError(editInput, '⚠️ A task with this name already exists.');
     return false;
   }
-
   const task = tasks.find((t) => t.id === id);
   if (task) {
     task.text = trimmed;
@@ -392,38 +429,22 @@ function saveEdit(id, newText, editInput) {
 }
 
 /* ----------------------------------------------------------
-   Inline error display helpers
+   Inline error helpers  (shared by Todo + Links)
 ---------------------------------------------------------- */
-
-/**
- * Show a validation error below an input field.
- * Auto-clears after 3 seconds or when the user types.
- * @param {HTMLInputElement} inputEl
- * @param {string} message
- */
 function showInputError(inputEl, message) {
   clearInputError(inputEl);
-
   inputEl.classList.add('input-error');
-
   const errEl = document.createElement('p');
-  errEl.className  = 'error-msg';
+  errEl.className   = 'error-msg';
   errEl.textContent = message;
   errEl.id          = `${inputEl.id}-error`;
-
   inputEl.setAttribute('aria-describedby', errEl.id);
   inputEl.insertAdjacentElement('afterend', errEl);
-
-  /* Auto-clear */
   const clearFn = () => clearInputError(inputEl);
   inputEl.addEventListener('input', clearFn, { once: true });
   setTimeout(clearFn, 3000);
 }
 
-/**
- * Remove any visible error state from an input.
- * @param {HTMLInputElement} inputEl
- */
 function clearInputError(inputEl) {
   inputEl.classList.remove('input-error');
   inputEl.removeAttribute('aria-describedby');
@@ -434,168 +455,168 @@ function clearInputError(inputEl) {
 /* ----------------------------------------------------------
    Rendering
 ---------------------------------------------------------- */
-
-/**
- * Build a single <li> element for one task.
- * Supports two states: view mode and edit mode.
- * @param {{ id: string, text: string, done: boolean }} task
- * @returns {HTMLLIElement}
- */
 function createTaskElement(task) {
-  const li = document.createElement('li');
-  li.className    = `task-item${task.done ? ' completed' : ''}`;
-  li.dataset.id   = task.id;
+  const status = dueDateStatus(task.dueDate);
+  const isOverdue = status === 'overdue' && !task.done;
+  const isToday   = status === 'today'   && !task.done;
+  const pri       = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
 
-  /* --- Checkbox --- */
-  const checkbox        = document.createElement('input');
-  checkbox.type         = 'checkbox';
-  checkbox.className    = 'task-checkbox';
-  checkbox.checked      = task.done;
-  checkbox.setAttribute('aria-label', `Mark "${task.text}" as ${task.done ? 'incomplete' : 'complete'}`);
+  const li = document.createElement('li');
+  li.className = [
+    'task-item',
+    task.done   ? 'completed' : '',
+    isOverdue   ? 'overdue'   : '',
+  ].filter(Boolean).join(' ');
+  li.dataset.id       = task.id;
+  li.dataset.priority = task.priority;
+
+  /* Checkbox */
+  const checkbox = document.createElement('input');
+  checkbox.type      = 'checkbox';
+  checkbox.className = 'task-checkbox';
+  checkbox.checked   = task.done;
+  checkbox.setAttribute('aria-label',
+    `Mark "${task.text}" as ${task.done ? 'incomplete' : 'complete'}`);
   checkbox.addEventListener('change', () => toggleComplete(task.id));
 
-  /* --- Task text --- */
-  const textSpan        = document.createElement('span');
-  textSpan.className    = 'task-text';
-  textSpan.textContent  = task.text;
+  /* Body: text + meta row */
+  const body = document.createElement('div');
+  body.className = 'task-body';
 
-  /* --- Action buttons --- */
+  const textSpan       = document.createElement('span');
+  textSpan.className   = 'task-text';
+  textSpan.textContent = task.text;
+
+  /* Meta row: priority badge + due date */
+  const metaRow = document.createElement('div');
+  metaRow.className = 'task-meta-row';
+
+  const badge         = document.createElement('span');
+  badge.className     = `task-priority-badge priority-${task.priority}`;
+  badge.textContent   = `${pri.emoji} ${pri.label}`;
+  badge.setAttribute('aria-label', `Priority: ${pri.label}`);
+  metaRow.appendChild(badge);
+
+  if (task.dueDate) {
+    const due         = document.createElement('span');
+    due.className     = [
+      'task-due-date',
+      isOverdue ? 'due-overdue' : '',
+      isToday   ? 'due-today'   : '',
+    ].filter(Boolean).join(' ');
+    due.textContent   = `📅 ${isOverdue ? '⚠️ Overdue · ' : isToday ? 'Due today · ' : ''}${formatDueDate(task.dueDate)}`;
+    metaRow.appendChild(due);
+  }
+
+  body.append(textSpan, metaRow);
+
+  /* Action buttons */
   const actions = document.createElement('div');
   actions.className = 'task-actions';
 
-  const editBtn        = document.createElement('button');
-  editBtn.type         = 'button';
-  editBtn.className    = 'btn-task btn-task-edit';
-  editBtn.textContent  = '✏️ Edit';
+  const editBtn       = document.createElement('button');
+  editBtn.type        = 'button';
+  editBtn.className   = 'btn-task btn-task-edit';
+  editBtn.textContent = '✏️ Edit';
   editBtn.setAttribute('aria-label', `Edit task: ${task.text}`);
-  editBtn.addEventListener('click', () => activateEditMode(li, task));
+  editBtn.addEventListener('click', () => activateEditMode(li, task, body));
 
-  const deleteBtn        = document.createElement('button');
-  deleteBtn.type         = 'button';
-  deleteBtn.className    = 'btn-task btn-task-delete';
-  deleteBtn.textContent  = '🗑 Delete';
+  const deleteBtn       = document.createElement('button');
+  deleteBtn.type        = 'button';
+  deleteBtn.className   = 'btn-task btn-task-delete';
+  deleteBtn.textContent = '🗑 Delete';
   deleteBtn.setAttribute('aria-label', `Delete task: ${task.text}`);
   deleteBtn.addEventListener('click', () => deleteTask(task.id));
 
   actions.append(editBtn, deleteBtn);
-  li.append(checkbox, textSpan, actions);
+  li.append(checkbox, body, actions);
   return li;
 }
 
-/**
- * Switch a task item into inline edit mode.
- * Replaces the text span with an <input> and swaps Edit→Save.
- * @param {HTMLLIElement} li
- * @param {{ id: string, text: string, done: boolean }} task
- */
-function activateEditMode(li, task) {
-  /* Replace text span with input */
-  const textSpan     = li.querySelector('.task-text');
-  const editInput    = document.createElement('input');
-  editInput.type     = 'text';
+function activateEditMode(li, task, body) {
+  const textSpan  = body.querySelector('.task-text');
+  const editInput = document.createElement('input');
+  editInput.type      = 'text';
   editInput.className = 'task-edit-input';
-  editInput.value    = task.text;
+  editInput.value     = task.text;
   editInput.maxLength = 200;
   editInput.setAttribute('aria-label', 'Edit task text');
-  li.replaceChild(editInput, textSpan);
+  body.replaceChild(editInput, textSpan);
   editInput.focus();
   editInput.select();
 
-  /* Swap Edit button → Save button */
-  const editBtn      = li.querySelector('.btn-task-edit');
-  const saveBtn      = document.createElement('button');
+  const editBtn  = li.querySelector('.btn-task-edit');
+  const saveBtn  = document.createElement('button');
   saveBtn.type       = 'button';
   saveBtn.className  = 'btn-task btn-task-save';
   saveBtn.textContent = '💾 Save';
   saveBtn.setAttribute('aria-label', 'Save task');
   editBtn.replaceWith(saveBtn);
 
-  /* Save on button click */
-  saveBtn.addEventListener('click', () => {
-    saveEdit(task.id, editInput.value, editInput);
-  });
-
-  /* Save on Enter, cancel on Escape */
+  saveBtn.addEventListener('click', () => saveEdit(task.id, editInput.value, editInput));
   editInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter')  saveEdit(task.id, editInput.value, editInput);
-    if (e.key === 'Escape') renderTasks(); // discard changes
+    if (e.key === 'Escape') renderTasks();
   });
 }
 
-/**
- * Filter the tasks array based on the active filter.
- * @returns {Array}
- */
 function getFilteredTasks() {
-  if (activeFilter === 'active')    return tasks.filter((t) => !t.done);
-  if (activeFilter === 'completed') return tasks.filter((t) =>  t.done);
-  return tasks; // 'all'
+  let list = tasks;
+  if (activeFilter === 'active')    list = tasks.filter((t) => !t.done);
+  if (activeFilter === 'completed') list = tasks.filter((t) =>  t.done);
+  return sortTasks(list);
 }
 
-/**
- * Update the task counter label.
- * Shows active (not done) task count.
- */
 function updateTaskCount() {
   const remaining = tasks.filter((t) => !t.done).length;
   taskCountEl.textContent =
     remaining === 1 ? '1 task remaining' : `${remaining} tasks remaining`;
 }
 
-/**
- * Re-render the entire task list from the `tasks` array.
- * Called after every state change.
- */
 function renderTasks() {
   const filtered = getFilteredTasks();
-
-  /* Clear the list */
   taskList.innerHTML = '';
 
   if (filtered.length === 0) {
     emptyState.classList.add('visible');
   } else {
     emptyState.classList.remove('visible');
-    filtered.forEach((task) => {
-      taskList.appendChild(createTaskElement(task));
-    });
+    filtered.forEach((task) => taskList.appendChild(createTaskElement(task)));
   }
-
   updateTaskCount();
 }
 
 /* ----------------------------------------------------------
    Filter buttons
 ---------------------------------------------------------- */
-
-/**
- * Set the active filter and update button aria-pressed states.
- * @param {string} filter - 'all' | 'active' | 'completed'
- */
 function setFilter(filter) {
   activeFilter = filter;
-
   filterBtns.forEach((btn) => {
     const isActive = btn.dataset.filter === filter;
     btn.classList.toggle('btn-filter-active', isActive);
     btn.setAttribute('aria-pressed', String(isActive));
   });
-
   renderTasks();
 }
 
 /* ----------------------------------------------------------
    Event listeners
 ---------------------------------------------------------- */
-
-/* Add task on form submit */
 todoForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const added = addTask(taskInput.value);
-  if (added) taskInput.value = '';
+  const added = addTask(
+    taskInput.value,
+    taskPriority.value,
+    taskDue.value
+  );
+  if (added) {
+    taskInput.value    = '';
+    taskPriority.value = 'medium';
+    taskDue.value      = '';
+    taskInput.focus();
+  }
 });
 
-/* Filter buttons */
 filterBtns.forEach((btn) => {
   btn.addEventListener('click', () => setFilter(btn.dataset.filter));
 });
@@ -603,11 +624,6 @@ filterBtns.forEach((btn) => {
 /* ----------------------------------------------------------
    Init
 ---------------------------------------------------------- */
-
-/**
- * Boot the To-Do module.
- * Loads saved tasks from LocalStorage, then renders.
- */
 function initTodo() {
   tasks = loadTasksFromStorage();
   renderTasks();
