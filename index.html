@@ -98,6 +98,18 @@
               ⚙ Apply
             </button>
           </div>
+
+          <!-- Session history panel -->
+          <div class="session-history">
+            <div class="session-history-header">
+              <span class="session-history-title">Today's Sessions</span>
+              <div role="group" aria-label="Completed pomodoros today" class="session-dots" id="session-dots">
+                <!-- Dots rendered by JS -->
+              </div>
+              <span id="session-count-label" class="session-count-label" aria-live="polite">0 / 4</span>
+            </div>
+            <p id="session-tip" class="session-tip" aria-live="polite"></p>
+          </div>
         </section>
 
         <!-- ------------------------------------------

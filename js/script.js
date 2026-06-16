@@ -1149,6 +1149,242 @@ function initTimer() {
 
 
 /* ==========================================================
+   OPTION C — NOTIFICATIONS + SESSION HISTORY
+
+   Responsibilities:
+     • Request Notification permission once (on first Start click)
+     • Fire a desktop notification when the session ends
+       (visible even when the tab is in the background)
+     • Track completed Pomodoro sessions for today
+     • Show dot indicators (4 dots = one full cycle)
+     • Suggest a short break after 4 sessions, long break after 8
+     • Persist session data to LocalStorage
+     • Reset the count automatically at midnight
+
+   LocalStorage key:
+     'ld_sessions' → { date: 'yyyy-mm-dd', count: number }
+========================================================== */
+
+const SESSIONS_KEY    = 'ld_sessions';
+const SHORT_BREAK_TIP = '☕ Nice work! Take a 5-minute short break.';
+const LONG_BREAK_TIP  = '🎉 4 sessions done! Time for a 15-minute long break.';
+const KEEP_GOING_TIP  = '💪 Keep it up! Start your next session when ready.';
+
+/* --- DOM references --- */
+const sessionDotsEl  = $('#session-dots');
+const sessionCountEl = $('#session-count-label');
+const sessionTipEl   = $('#session-tip');
+
+/* ----------------------------------------------------------
+   LocalStorage helpers
+---------------------------------------------------------- */
+
+/**
+ * Load today's session data from LocalStorage.
+ * If the saved date is not today, resets the count to 0.
+ * @returns {{ date: string, count: number }}
+ */
+function loadSessions() {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    if (!raw) return { date: todayISO(), count: 0 };
+    const data = JSON.parse(raw);
+    /* Reset if the saved date is not today (midnight rollover) */
+    if (data.date !== todayISO()) return { date: todayISO(), count: 0 };
+    return data;
+  } catch {
+    return { date: todayISO(), count: 0 };
+  }
+}
+
+/**
+ * Persist the current session data.
+ * @param {{ date: string, count: number }} data
+ */
+function saveSessionsToStorage(data) {
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify(data));
+}
+
+/* ----------------------------------------------------------
+   Notification helpers
+---------------------------------------------------------- */
+
+/**
+ * Request Notification permission from the browser.
+ * Called once the first time the user starts the timer.
+ * Silently no-ops if the API is unavailable.
+ */
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+/**
+ * Fire a desktop notification.
+ * Silently no-ops if permission is not granted or API is absent.
+ * @param {string} title
+ * @param {string} body
+ */
+function sendNotification(title, body) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const n = new Notification(title, {
+      body,
+      icon:   'https://em-content.zobj.net/source/apple/354/tomato_1f345.png',
+      badge:  'https://em-content.zobj.net/source/apple/354/tomato_1f345.png',
+      silent: false,
+    });
+    /* Auto-close after 8 seconds */
+    setTimeout(() => n.close(), 8000);
+  } catch {
+    /* Some browsers block Notification constructor — skip silently */
+  }
+}
+
+/* ----------------------------------------------------------
+   Session rendering
+---------------------------------------------------------- */
+
+/**
+ * Render the dot row and update the count label + tip message.
+ * Shows dots in groups of 4. The most recent dot gets a pop-in
+ * animation. Every 4th dot is a milestone (green + larger).
+ * @param {number} count  total sessions completed today
+ * @param {boolean} [animate=false]  pop-in the last dot
+ */
+function renderSessionHistory(count, animate = false) {
+  const CYCLE      = 4;          // sessions per Pomodoro cycle
+  const MAX_DOTS   = 8;          // display at most 8 dots (2 cycles)
+  const display    = Math.min(count, MAX_DOTS);
+  const total      = Math.max(display, CYCLE * Math.ceil((count || 1) / CYCLE));
+  const dotsToShow = Math.max(total, CYCLE); // always show at least one full cycle
+
+  sessionDotsEl.innerHTML = '';
+
+  for (let i = 0; i < dotsToShow; i++) {
+    const dot = document.createElement('span');
+    dot.className = 'session-dot';
+    dot.setAttribute('aria-label',
+      i < count ? `Session ${i + 1} complete` : `Session ${i + 1} pending`);
+
+    if (i < count) {
+      const isMilestone = (i + 1) % CYCLE === 0;
+      dot.classList.add(isMilestone ? 'dot-milestone' : 'dot-done');
+      if (animate && i === count - 1) dot.classList.add('dot-pop');
+    }
+    sessionDotsEl.appendChild(dot);
+  }
+
+  /* Count label e.g. "3 / 4" */
+  const cyclePosition = count % CYCLE || (count > 0 ? CYCLE : 0);
+  sessionCountEl.textContent = `${cyclePosition} / ${CYCLE}`;
+
+  /* Tip message */
+  if (count === 0) {
+    sessionTipEl.textContent = '';
+  } else if (count % (CYCLE * 2) === 0) {
+    sessionTipEl.textContent = LONG_BREAK_TIP;
+  } else if (count % CYCLE === 0) {
+    sessionTipEl.textContent = SHORT_BREAK_TIP;
+  } else {
+    sessionTipEl.textContent = KEEP_GOING_TIP;
+  }
+}
+
+/* ----------------------------------------------------------
+   Record a completed session
+   Called from tick() when the timer reaches 00:00
+---------------------------------------------------------- */
+
+/**
+ * Increment today's session count, persist, and re-render.
+ * Also fires a desktop notification.
+ */
+function recordSession() {
+  const data = loadSessions();
+  data.count += 1;
+  saveSessionsToStorage(data);
+  renderSessionHistory(data.count, true);
+
+  /* Choose notification message based on session count */
+  const isLongBreak  = data.count % (4 * 2) === 0;
+  const isShortBreak = data.count % 4 === 0;
+
+  const notifTitle = isLongBreak
+    ? '🎉 Long break time!'
+    : isShortBreak
+      ? '☕ Short break time!'
+      : '✅ Pomodoro complete!';
+
+  const notifBody = isLongBreak
+    ? `Amazing — ${data.count} sessions today! Take a proper 15-minute break.`
+    : isShortBreak
+      ? `${data.count} sessions done today. Take 5 minutes away from the screen.`
+      : `Session ${data.count} done. Ready for the next one? `;
+
+  sendNotification(notifTitle, notifBody);
+}
+
+/* ----------------------------------------------------------
+   Patch tick() to call recordSession on completion
+   (extends the existing tick without rewriting it)
+---------------------------------------------------------- */
+const _originalTick = tick;
+
+/**
+ * Wrap tick to hook in session recording when the timer finishes.
+ * We redefine tick so the existing setInterval still calls the
+ * augmented version.
+ */
+/* eslint-disable no-global-assign */
+tick = function tickWithSession() {
+  const wasBefore = remainingSeconds;
+  _originalTick();
+  /* _originalTick decrements remainingSeconds; if it just hit 0 we record */
+  if (wasBefore === 1 && remainingSeconds === 0) {
+    recordSession();
+  }
+};
+/* eslint-enable no-global-assign */
+
+/* ----------------------------------------------------------
+   Patch startTimer() to request notification permission
+   the first time the user starts the timer
+---------------------------------------------------------- */
+const _originalStartTimer = startTimer;
+
+startTimer = function startTimerWithNotif() {
+  requestNotificationPermission();
+  _originalStartTimer();
+};
+
+/* ----------------------------------------------------------
+   Init
+---------------------------------------------------------- */
+
+/**
+ * Boot the session history module.
+ * Loads today's saved count, renders dots.
+ * Auto-schedules a midnight reset check every minute.
+ */
+function initSessions() {
+  const data = loadSessions();
+  renderSessionHistory(data.count);
+
+  /* Check every minute whether the date has rolled over.
+     If it has, reset the count and re-render. */
+  setInterval(() => {
+    const current = loadSessions();
+    renderSessionHistory(current.count);
+  }, 60 * 1000);
+}
+
+
+/* ==========================================================
    INIT — runs when the DOM is fully loaded
 ========================================================== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -1157,4 +1393,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initTodo();     // M5
   initLinks();    // M6
   initTimer();    // M7
+  initSessions(); // Option C
 });
