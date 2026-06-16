@@ -1,0 +1,1144 @@
+/* ==========================================================
+   Life Dashboard — script.js
+   Milestones:
+     M3  : Greeting (clock, date, greeting)
+     M4  : Light / Dark mode
+     M5  : To-Do List (add, render, delete, complete, edit,
+            duplicate guard, LocalStorage)
+     M6  : Quick Links (add, render, delete, LocalStorage)
+     M7  : Focus Timer (countdown, start/pause/reset,
+            custom duration, LocalStorage)
+========================================================== */
+
+'use strict';
+
+/* ----------------------------------------------------------
+   UTILITY — safely query DOM elements
+   Throws a clear error if an expected element is missing,
+   so bugs surface immediately during development.
+---------------------------------------------------------- */
+/**
+ * Select a single DOM element; throws if not found.
+ * @param {string} selector - CSS selector
+ * @returns {HTMLElement}
+ */
+function $(selector) {
+  const el = document.querySelector(selector);
+  if (!el) throw new Error(`Element not found: "${selector}"`);
+  return el;
+}
+
+
+/* ==========================================================
+   M3 — GREETING
+   Responsibilities:
+     • Update the clock every second (HH:MM:SS, 12-hour format)
+     • Update the date once on load (full weekday + date string)
+     • Set greeting text based on current hour
+========================================================== */
+
+/* --- DOM references --- */
+const clockEl    = $('#clock');
+const dateEl     = $('#date-display');
+const greetingEl = $('#greeting-text');
+
+/**
+ * Return "Good Morning", "Good Afternoon", or "Good Evening"
+ * based on the current hour (24-hour).
+ * @returns {string}
+ */
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour >= 5 && hour < 12)  return '🌅 Good Morning';
+  if (hour >= 12 && hour < 17) return '☀️ Good Afternoon';
+  if (hour >= 17 && hour < 21) return '🌆 Good Evening';
+  return '🌙 Good Night';
+}
+
+/**
+ * Format the current time as HH:MM:SS (12-hour with AM/PM).
+ * Uses padStart so single digits always show as two characters.
+ * @returns {string}  e.g. "09:04:37 AM"
+ */
+function formatTime() {
+  const now     = new Date();
+  let   hours   = now.getHours();
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const period  = hours >= 12 ? 'PM' : 'AM';
+
+  hours = hours % 12 || 12; // convert 0 → 12 for 12 AM
+  return `${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${period}`;
+}
+
+/**
+ * Format today's date as a long readable string.
+ * e.g. "Tuesday, 16 June 2026"
+ * @returns {string}
+ */
+function formatDate() {
+  return new Date().toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day:     'numeric',
+    month:   'long',
+    year:    'numeric',
+  });
+}
+
+/**
+ * Update the clock display and greeting every second.
+ * Called once immediately, then on a 1-second interval.
+ */
+function updateClock() {
+  const now  = new Date();
+  const hour = now.getHours();
+
+  /* Update clock */
+  clockEl.textContent = formatTime();
+
+  /* Update greeting only when the hour changes — avoids
+     unnecessary DOM writes every second */
+  const currentGreeting = greetingEl.textContent;
+  const newGreeting     = getGreeting();
+  if (currentGreeting !== newGreeting) {
+    greetingEl.textContent = newGreeting;
+  }
+
+  /* Update emoji on greeting card based on time
+     (drives the gradient mood — dark/light is separate) */
+  const greetingCard = document.getElementById('greeting');
+  greetingCard.setAttribute('data-time-of-day',
+    hour >= 5  && hour < 12 ? 'morning'   :
+    hour >= 12 && hour < 17 ? 'afternoon' :
+    hour >= 17 && hour < 21 ? 'evening'   : 'night'
+  );
+}
+
+/**
+ * Set the date element once on page load.
+ * The date never changes during a session, so no interval needed.
+ */
+function initDate() {
+  dateEl.textContent = formatDate();
+}
+
+/**
+ * Boot the greeting module.
+ * Sets date immediately, then starts the clock interval.
+ */
+function initGreeting() {
+  initDate();
+  updateClock();                          // run once immediately (no delay)
+  setInterval(updateClock, 1000);         // then every second
+}
+
+
+/* ==========================================================
+   M4 — LIGHT / DARK MODE
+   Responsibilities:
+     • Toggle 'dark' class on <body>
+     • Swap the button icon (🌙 ↔ ☀️)
+     • Persist the user's preference in LocalStorage
+     • Restore the saved preference on every page load
+     • Respect the OS-level preference as the default
+       when no saved preference exists yet
+========================================================== */
+
+/* --- LocalStorage key --- */
+const THEME_KEY = 'ld_theme'; // "ld" prefix = Life Dashboard (avoids key collisions)
+
+/* --- DOM reference --- */
+const themeToggleBtn = $('#theme-toggle');
+
+/**
+ * Apply a theme to <body> and update the toggle button icon.
+ * Also removes the dark-preload class from <html> once JS
+ * takes full control (prevents double-application).
+ * @param {'light' | 'dark'} theme
+ */
+function applyTheme(theme) {
+  /* Clean up the pre-paint helper class — JS owns the theme now */
+  document.documentElement.classList.remove('dark-preload');
+
+  if (theme === 'dark') {
+    document.body.classList.add('dark');
+    themeToggleBtn.textContent  = '☀️';
+    themeToggleBtn.title        = 'Switch to light mode';
+    themeToggleBtn.setAttribute('aria-label', 'Switch to light mode');
+  } else {
+    document.body.classList.remove('dark');
+    themeToggleBtn.textContent  = '🌙';
+    themeToggleBtn.title        = 'Switch to dark mode';
+    themeToggleBtn.setAttribute('aria-label', 'Switch to dark mode');
+  }
+}
+
+/**
+ * Save the current theme preference to LocalStorage.
+ * @param {'light' | 'dark'} theme
+ */
+function saveTheme(theme) {
+  localStorage.setItem(THEME_KEY, theme);
+}
+
+/**
+ * Read the saved theme from LocalStorage.
+ * Falls back to the OS colour-scheme preference if nothing is saved yet.
+ * Falls back to 'light' if the OS preference is also unavailable.
+ * @returns {'light' | 'dark'}
+ */
+function getSavedTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'dark' || saved === 'light') return saved;
+
+  /* No saved preference — check OS preference */
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
+
+/**
+ * Toggle between light and dark, then persist the new value.
+ * Called when the user clicks the theme button.
+ */
+function toggleTheme() {
+  const isDark   = document.body.classList.contains('dark');
+  const newTheme = isDark ? 'light' : 'dark';
+  applyTheme(newTheme);
+  saveTheme(newTheme);
+}
+
+/**
+ * Boot the theme module.
+ * Reads the saved (or OS-default) preference and applies it
+ * before anything is painted — preventing a flash of wrong theme.
+ */
+function initTheme() {
+  applyTheme(getSavedTheme());
+  themeToggleBtn.addEventListener('click', toggleTheme);
+}
+
+
+/* ==========================================================
+   M5 — TO-DO LIST
+   Responsibilities:
+     • Add tasks with duplicate prevention
+     • Render the filtered task list to the DOM
+     • Mark tasks complete / incomplete (toggle)
+     • Inline edit a task (click Edit → input appears → Save)
+     • Delete a task
+     • Filter tasks: All | Active | Completed
+     • Update task counter
+     • Persist all tasks to LocalStorage
+     • Load tasks from LocalStorage on page load
+
+   Data shape (array stored as JSON):
+     tasks = [{ id: string, text: string, done: boolean }, ...]
+========================================================== */
+
+/* --- LocalStorage key --- */
+const TODO_KEY = 'ld_tasks';
+
+/* --- State --- */
+let tasks       = [];          // single source of truth
+let activeFilter = 'all';      // 'all' | 'active' | 'completed'
+
+/* --- DOM references --- */
+const todoForm    = $('#todo-form');
+const taskInput   = $('#task-input');
+const taskList    = $('#task-list');
+const taskCountEl = $('#task-count');
+const emptyState  = $('#empty-state');
+const filterBtns  = document.querySelectorAll('.btn-filter');
+
+/* ----------------------------------------------------------
+   LocalStorage helpers
+---------------------------------------------------------- */
+
+/**
+ * Save the tasks array to LocalStorage as a JSON string.
+ */
+function saveTasksToStorage() {
+  localStorage.setItem(TODO_KEY, JSON.stringify(tasks));
+}
+
+/**
+ * Read and parse tasks from LocalStorage.
+ * Returns an empty array if nothing is saved or data is corrupt.
+ * @returns {Array<{id: string, text: string, done: boolean}>}
+ */
+function loadTasksFromStorage() {
+  try {
+    const raw = localStorage.getItem(TODO_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/* ----------------------------------------------------------
+   ID generator
+   Uses Date.now() + a random suffix — simple and collision-safe
+   for a client-side app with a single user.
+---------------------------------------------------------- */
+/**
+ * Generate a unique string ID.
+ * @returns {string}
+ */
+function generateId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/* ----------------------------------------------------------
+   Duplicate detection
+---------------------------------------------------------- */
+/**
+ * Check if a task with the same text already exists.
+ * Comparison is case-insensitive and trims whitespace.
+ * @param {string} text
+ * @param {string|null} excludeId - skip this id (used during edit)
+ * @returns {boolean}
+ */
+function isDuplicate(text, excludeId = null) {
+  const normalised = text.trim().toLowerCase();
+  return tasks.some(
+    (t) => t.text.toLowerCase() === normalised && t.id !== excludeId
+  );
+}
+
+/* ----------------------------------------------------------
+   Core CRUD operations
+   Each one mutates `tasks`, saves to storage, then re-renders.
+---------------------------------------------------------- */
+
+/**
+ * Add a new task.
+ * Validates: not empty, not duplicate.
+ * @param {string} text
+ * @returns {boolean} true if added, false if rejected
+ */
+function addTask(text) {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    showInputError(taskInput, 'Task cannot be empty.');
+    return false;
+  }
+
+  if (isDuplicate(trimmed)) {
+    showInputError(taskInput, '⚠️ This task already exists.');
+    return false;
+  }
+
+  tasks.push({ id: generateId(), text: trimmed, done: false });
+  saveTasksToStorage();
+  renderTasks();
+  return true;
+}
+
+/**
+ * Delete a task by id.
+ * @param {string} id
+ */
+function deleteTask(id) {
+  tasks = tasks.filter((t) => t.id !== id);
+  saveTasksToStorage();
+  renderTasks();
+}
+
+/**
+ * Toggle the done state of a task by id.
+ * @param {string} id
+ */
+function toggleComplete(id) {
+  const task = tasks.find((t) => t.id === id);
+  if (task) {
+    task.done = !task.done;
+    saveTasksToStorage();
+    renderTasks();
+  }
+}
+
+/**
+ * Save an edited task text.
+ * Validates: not empty, not duplicate (ignoring itself).
+ * @param {string} id
+ * @param {string} newText
+ * @param {HTMLElement} editInput - the input element (for error display)
+ * @returns {boolean} true if saved
+ */
+function saveEdit(id, newText, editInput) {
+  const trimmed = newText.trim();
+
+  if (!trimmed) {
+    showInputError(editInput, 'Task cannot be empty.');
+    return false;
+  }
+
+  if (isDuplicate(trimmed, id)) {
+    showInputError(editInput, '⚠️ A task with this name already exists.');
+    return false;
+  }
+
+  const task = tasks.find((t) => t.id === id);
+  if (task) {
+    task.text = trimmed;
+    saveTasksToStorage();
+    renderTasks();
+  }
+  return true;
+}
+
+/* ----------------------------------------------------------
+   Inline error display helpers
+---------------------------------------------------------- */
+
+/**
+ * Show a validation error below an input field.
+ * Auto-clears after 3 seconds or when the user types.
+ * @param {HTMLInputElement} inputEl
+ * @param {string} message
+ */
+function showInputError(inputEl, message) {
+  clearInputError(inputEl);
+
+  inputEl.classList.add('input-error');
+
+  const errEl = document.createElement('p');
+  errEl.className  = 'error-msg';
+  errEl.textContent = message;
+  errEl.id          = `${inputEl.id}-error`;
+
+  inputEl.setAttribute('aria-describedby', errEl.id);
+  inputEl.insertAdjacentElement('afterend', errEl);
+
+  /* Auto-clear */
+  const clearFn = () => clearInputError(inputEl);
+  inputEl.addEventListener('input', clearFn, { once: true });
+  setTimeout(clearFn, 3000);
+}
+
+/**
+ * Remove any visible error state from an input.
+ * @param {HTMLInputElement} inputEl
+ */
+function clearInputError(inputEl) {
+  inputEl.classList.remove('input-error');
+  inputEl.removeAttribute('aria-describedby');
+  const existing = document.getElementById(`${inputEl.id}-error`);
+  if (existing) existing.remove();
+}
+
+/* ----------------------------------------------------------
+   Rendering
+---------------------------------------------------------- */
+
+/**
+ * Build a single <li> element for one task.
+ * Supports two states: view mode and edit mode.
+ * @param {{ id: string, text: string, done: boolean }} task
+ * @returns {HTMLLIElement}
+ */
+function createTaskElement(task) {
+  const li = document.createElement('li');
+  li.className    = `task-item${task.done ? ' completed' : ''}`;
+  li.dataset.id   = task.id;
+
+  /* --- Checkbox --- */
+  const checkbox        = document.createElement('input');
+  checkbox.type         = 'checkbox';
+  checkbox.className    = 'task-checkbox';
+  checkbox.checked      = task.done;
+  checkbox.setAttribute('aria-label', `Mark "${task.text}" as ${task.done ? 'incomplete' : 'complete'}`);
+  checkbox.addEventListener('change', () => toggleComplete(task.id));
+
+  /* --- Task text --- */
+  const textSpan        = document.createElement('span');
+  textSpan.className    = 'task-text';
+  textSpan.textContent  = task.text;
+
+  /* --- Action buttons --- */
+  const actions = document.createElement('div');
+  actions.className = 'task-actions';
+
+  const editBtn        = document.createElement('button');
+  editBtn.type         = 'button';
+  editBtn.className    = 'btn-task btn-task-edit';
+  editBtn.textContent  = '✏️ Edit';
+  editBtn.setAttribute('aria-label', `Edit task: ${task.text}`);
+  editBtn.addEventListener('click', () => activateEditMode(li, task));
+
+  const deleteBtn        = document.createElement('button');
+  deleteBtn.type         = 'button';
+  deleteBtn.className    = 'btn-task btn-task-delete';
+  deleteBtn.textContent  = '🗑 Delete';
+  deleteBtn.setAttribute('aria-label', `Delete task: ${task.text}`);
+  deleteBtn.addEventListener('click', () => deleteTask(task.id));
+
+  actions.append(editBtn, deleteBtn);
+  li.append(checkbox, textSpan, actions);
+  return li;
+}
+
+/**
+ * Switch a task item into inline edit mode.
+ * Replaces the text span with an <input> and swaps Edit→Save.
+ * @param {HTMLLIElement} li
+ * @param {{ id: string, text: string, done: boolean }} task
+ */
+function activateEditMode(li, task) {
+  /* Replace text span with input */
+  const textSpan     = li.querySelector('.task-text');
+  const editInput    = document.createElement('input');
+  editInput.type     = 'text';
+  editInput.className = 'task-edit-input';
+  editInput.value    = task.text;
+  editInput.maxLength = 200;
+  editInput.setAttribute('aria-label', 'Edit task text');
+  li.replaceChild(editInput, textSpan);
+  editInput.focus();
+  editInput.select();
+
+  /* Swap Edit button → Save button */
+  const editBtn      = li.querySelector('.btn-task-edit');
+  const saveBtn      = document.createElement('button');
+  saveBtn.type       = 'button';
+  saveBtn.className  = 'btn-task btn-task-save';
+  saveBtn.textContent = '💾 Save';
+  saveBtn.setAttribute('aria-label', 'Save task');
+  editBtn.replaceWith(saveBtn);
+
+  /* Save on button click */
+  saveBtn.addEventListener('click', () => {
+    saveEdit(task.id, editInput.value, editInput);
+  });
+
+  /* Save on Enter, cancel on Escape */
+  editInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter')  saveEdit(task.id, editInput.value, editInput);
+    if (e.key === 'Escape') renderTasks(); // discard changes
+  });
+}
+
+/**
+ * Filter the tasks array based on the active filter.
+ * @returns {Array}
+ */
+function getFilteredTasks() {
+  if (activeFilter === 'active')    return tasks.filter((t) => !t.done);
+  if (activeFilter === 'completed') return tasks.filter((t) =>  t.done);
+  return tasks; // 'all'
+}
+
+/**
+ * Update the task counter label.
+ * Shows active (not done) task count.
+ */
+function updateTaskCount() {
+  const remaining = tasks.filter((t) => !t.done).length;
+  taskCountEl.textContent =
+    remaining === 1 ? '1 task remaining' : `${remaining} tasks remaining`;
+}
+
+/**
+ * Re-render the entire task list from the `tasks` array.
+ * Called after every state change.
+ */
+function renderTasks() {
+  const filtered = getFilteredTasks();
+
+  /* Clear the list */
+  taskList.innerHTML = '';
+
+  if (filtered.length === 0) {
+    emptyState.classList.add('visible');
+  } else {
+    emptyState.classList.remove('visible');
+    filtered.forEach((task) => {
+      taskList.appendChild(createTaskElement(task));
+    });
+  }
+
+  updateTaskCount();
+}
+
+/* ----------------------------------------------------------
+   Filter buttons
+---------------------------------------------------------- */
+
+/**
+ * Set the active filter and update button aria-pressed states.
+ * @param {string} filter - 'all' | 'active' | 'completed'
+ */
+function setFilter(filter) {
+  activeFilter = filter;
+
+  filterBtns.forEach((btn) => {
+    const isActive = btn.dataset.filter === filter;
+    btn.classList.toggle('btn-filter-active', isActive);
+    btn.setAttribute('aria-pressed', String(isActive));
+  });
+
+  renderTasks();
+}
+
+/* ----------------------------------------------------------
+   Event listeners
+---------------------------------------------------------- */
+
+/* Add task on form submit */
+todoForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const added = addTask(taskInput.value);
+  if (added) taskInput.value = '';
+});
+
+/* Filter buttons */
+filterBtns.forEach((btn) => {
+  btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+});
+
+/* ----------------------------------------------------------
+   Init
+---------------------------------------------------------- */
+
+/**
+ * Boot the To-Do module.
+ * Loads saved tasks from LocalStorage, then renders.
+ */
+function initTodo() {
+  tasks = loadTasksFromStorage();
+  renderTasks();
+}
+
+
+/* ==========================================================
+   M6 — QUICK LINKS
+   Responsibilities:
+     • Add a link (label + URL) with validation
+     • Render links as clickable items that open in a new tab
+     • Delete a link
+     • Persist links to LocalStorage
+     • Load links from LocalStorage on page load
+
+   Data shape (array stored as JSON):
+     links = [{ id: string, label: string, url: string }, ...]
+========================================================== */
+
+/* --- LocalStorage key --- */
+const LINKS_KEY = 'ld_links';
+
+/* --- State --- */
+let links = [];
+
+/* --- DOM references --- */
+const linkForm    = $('#link-form');
+const linkLabelEl = $('#link-label');
+const linkUrlEl   = $('#link-url');
+const linksList   = $('#links-list');
+
+/* ----------------------------------------------------------
+   LocalStorage helpers
+---------------------------------------------------------- */
+
+/**
+ * Save the links array to LocalStorage as a JSON string.
+ */
+function saveLinksToStorage() {
+  localStorage.setItem(LINKS_KEY, JSON.stringify(links));
+}
+
+/**
+ * Read and parse links from LocalStorage.
+ * Returns an empty array if nothing is saved or data is corrupt.
+ * @returns {Array<{id: string, label: string, url: string}>}
+ */
+function loadLinksFromStorage() {
+  try {
+    const raw = localStorage.getItem(LINKS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/* ----------------------------------------------------------
+   URL validation helper
+   Accepts http:// and https:// URLs only.
+   Uses the browser's built-in URL constructor — no regex needed.
+---------------------------------------------------------- */
+
+/**
+ * Check whether a string is a valid http/https URL.
+ * @param {string} str
+ * @returns {boolean}
+ */
+function isValidUrl(str) {
+  try {
+    const url = new URL(str);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/* ----------------------------------------------------------
+   Normalise URL
+   Prepend https:// if the user forgot the scheme entirely,
+   e.g. "github.com" → "https://github.com"
+---------------------------------------------------------- */
+
+/**
+ * Add https:// if no protocol is present.
+ * @param {string} url
+ * @returns {string}
+ */
+function normaliseUrl(url) {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
+/* ----------------------------------------------------------
+   Core operations
+---------------------------------------------------------- */
+
+/**
+ * Add a new link after validating label and URL.
+ * @param {string} label
+ * @param {string} rawUrl
+ * @returns {boolean} true if added
+ */
+function addLink(label, rawUrl) {
+  const trimmedLabel = label.trim();
+  const normalisedUrl = normaliseUrl(rawUrl);
+
+  /* Validate label */
+  if (!trimmedLabel) {
+    showInputError(linkLabelEl, 'Please enter a label.');
+    return false;
+  }
+
+  /* Validate URL */
+  if (!rawUrl.trim()) {
+    showInputError(linkUrlEl, 'Please enter a URL.');
+    return false;
+  }
+
+  if (!isValidUrl(normalisedUrl)) {
+    showInputError(linkUrlEl, 'Please enter a valid URL (e.g. https://example.com).');
+    return false;
+  }
+
+  links.push({ id: generateId(), label: trimmedLabel, url: normalisedUrl });
+  saveLinksToStorage();
+  renderLinks();
+  return true;
+}
+
+/**
+ * Delete a link by id.
+ * @param {string} id
+ */
+function deleteLink(id) {
+  links = links.filter((l) => l.id !== id);
+  saveLinksToStorage();
+  renderLinks();
+}
+
+/* ----------------------------------------------------------
+   Rendering
+---------------------------------------------------------- */
+
+/**
+ * Build a single <li> element for one link.
+ * @param {{ id: string, label: string, url: string }} link
+ * @returns {HTMLLIElement}
+ */
+function createLinkElement(link) {
+  const li = document.createElement('li');
+  li.className  = 'link-item';
+  li.dataset.id = link.id;
+
+  /* Clickable label — opens in new tab with security attributes */
+  const anchor        = document.createElement('a');
+  anchor.href         = link.url;
+  anchor.textContent  = link.label;
+  anchor.target       = '_blank';
+  anchor.rel          = 'noopener noreferrer'; // security: prevents tab-napping
+  anchor.title        = link.url;              // show URL on hover
+
+  /* Delete button */
+  const deleteBtn       = document.createElement('button');
+  deleteBtn.type        = 'button';
+  deleteBtn.className   = 'link-item-delete';
+  deleteBtn.textContent = '🗑';
+  deleteBtn.setAttribute('aria-label', `Delete link: ${link.label}`);
+  deleteBtn.addEventListener('click', () => deleteLink(link.id));
+
+  li.append(anchor, deleteBtn);
+  return li;
+}
+
+/**
+ * Re-render the entire links list from the `links` array.
+ * Called after every state change.
+ */
+function renderLinks() {
+  linksList.innerHTML = '';
+
+  if (links.length === 0) {
+    const empty = document.createElement('li');
+    empty.className   = 'links-empty';
+    empty.textContent = 'No links yet. Add one above!';
+    linksList.appendChild(empty);
+    return;
+  }
+
+  links.forEach((link) => {
+    linksList.appendChild(createLinkElement(link));
+  });
+}
+
+/* ----------------------------------------------------------
+   Event listeners
+---------------------------------------------------------- */
+
+linkForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const added = addLink(linkLabelEl.value, linkUrlEl.value);
+  if (added) {
+    linkLabelEl.value = '';
+    linkUrlEl.value   = '';
+    linkLabelEl.focus(); // return focus to first field for quick re-entry
+  }
+});
+
+/* ----------------------------------------------------------
+   Init
+---------------------------------------------------------- */
+
+/**
+ * Boot the Quick Links module.
+ * Loads saved links from LocalStorage, then renders.
+ */
+function initLinks() {
+  links = loadLinksFromStorage();
+  renderLinks();
+}
+
+
+/* ==========================================================
+   M7 — FOCUS TIMER (POMODORO)
+   Responsibilities:
+     • Count down from a configurable duration (default 25 min)
+     • Start / Pause / Resume / Reset controls
+     • Update the browser tab title while running
+     • Visual states: idle | running | paused | finished
+     • Play a subtle audio cue when the session ends
+     • Persist the user's chosen duration to LocalStorage
+     • Load the saved duration on page load
+
+   State machine:
+     idle  ──[Start]──►  running  ──[Pause]──►  paused
+                  ▲                                 │
+                  └─────────[Resume]────────────────┘
+     running / paused  ──[Reset]──►  idle
+     running ──[reaches 0]──►  finished  ──[Reset]──►  idle
+
+   Data shape in LocalStorage:
+     'ld_pomodoro_mins' → number (e.g. 25)
+========================================================== */
+
+/* --- LocalStorage key --- */
+const POMODORO_KEY = 'ld_pomodoro_mins';
+
+/* --- Constants --- */
+const DEFAULT_MINS  = 25;
+const MIN_MINS      = 1;
+const MAX_MINS      = 60;
+
+/* --- Timer state --- */
+let timerInterval   = null;          // setInterval handle
+let timerStatus     = 'idle';        // 'idle' | 'running' | 'paused' | 'finished'
+let totalSeconds    = DEFAULT_MINS * 60;  // configured duration in seconds
+let remainingSeconds = totalSeconds;      // countdown value
+
+/* --- DOM references --- */
+const timerDisplay  = $('#timer-display');
+const btnStart      = $('#btn-start');
+const btnPause      = $('#btn-pause');
+const btnReset      = $('#btn-reset');
+const customTimeEl  = $('#custom-time');
+const btnSetTime    = $('#btn-set-time');
+
+/* --- Original page title (restored when timer stops) --- */
+const originalTitle = document.title;
+
+/* ----------------------------------------------------------
+   LocalStorage helpers
+---------------------------------------------------------- */
+
+/**
+ * Save the chosen Pomodoro duration (in minutes) to LocalStorage.
+ * @param {number} mins
+ */
+function savePomodoroMins(mins) {
+  localStorage.setItem(POMODORO_KEY, String(mins));
+}
+
+/**
+ * Load the saved Pomodoro duration from LocalStorage.
+ * Falls back to DEFAULT_MINS if nothing is saved or value is invalid.
+ * @returns {number} minutes
+ */
+function loadPomodoroMins() {
+  const raw  = localStorage.getItem(POMODORO_KEY);
+  const mins = parseInt(raw, 10);
+  if (!isNaN(mins) && mins >= MIN_MINS && mins <= MAX_MINS) return mins;
+  return DEFAULT_MINS;
+}
+
+/* ----------------------------------------------------------
+   Display helpers
+---------------------------------------------------------- */
+
+/**
+ * Format a total number of seconds as MM:SS.
+ * @param {number} seconds
+ * @returns {string}  e.g. "24:59"
+ */
+function formatTimer(seconds) {
+  const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const s = String(seconds % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+/**
+ * Push the current time to the timer display element and page title.
+ */
+function updateTimerDisplay() {
+  const formatted = formatTimer(remainingSeconds);
+  timerDisplay.textContent = formatted;
+
+  /* Update browser tab so the user can see the countdown
+     even when the dashboard is in a background tab */
+  if (timerStatus === 'running') {
+    document.title = `⏱ ${formatted} — Life Dashboard`;
+  }
+}
+
+/**
+ * Apply visual state classes to the timer card and buttons.
+ * @param {'idle'|'running'|'paused'|'finished'} status
+ */
+function applyTimerState(status) {
+  const card = document.getElementById('timer');
+
+  /* Remove all state classes then add the current one */
+  card.classList.remove('timer-running', 'timer-paused', 'timer-finished');
+  if (status !== 'idle') card.classList.add(`timer-${status}`);
+
+  /* Button enable/disable logic */
+  switch (status) {
+    case 'idle':
+      btnStart.disabled = false;
+      btnPause.disabled = true;
+      btnStart.textContent = '▶ Start';
+      btnPause.textContent = '⏸ Pause';
+      document.title = originalTitle;
+      break;
+
+    case 'running':
+      btnStart.disabled = true;
+      btnPause.disabled = false;
+      btnPause.textContent = '⏸ Pause';
+      break;
+
+    case 'paused':
+      btnStart.disabled = false;
+      btnPause.disabled = true;
+      btnStart.textContent = '▶ Resume';
+      document.title = `⏸ ${formatTimer(remainingSeconds)} — Life Dashboard`;
+      break;
+
+    case 'finished':
+      btnStart.disabled = true;
+      btnPause.disabled = true;
+      document.title = '✅ Session done! — Life Dashboard';
+      break;
+  }
+}
+
+/* ----------------------------------------------------------
+   Audio cue
+   Uses the Web Audio API to generate a simple two-tone chime
+   without needing any external sound files.
+---------------------------------------------------------- */
+
+/**
+ * Play a short completion chime using the Web Audio API.
+ * Silently no-ops if the browser doesn't support it.
+ */
+function playFinishChime() {
+  try {
+    const ctx        = new (window.AudioContext || window.webkitAudioContext)();
+    const notes      = [523.25, 659.25, 783.99]; // C5, E5, G5
+    let   startTime  = ctx.currentTime;
+
+    notes.forEach((freq) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type      = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.25, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.4);
+
+      startTime += 0.18; // slight overlap for a smooth chord
+    });
+
+    /* Close context after notes finish to free resources */
+    setTimeout(() => ctx.close(), 2000);
+  } catch {
+    /* Web Audio not available — skip silently */
+  }
+}
+
+/* ----------------------------------------------------------
+   Core timer controls
+---------------------------------------------------------- */
+
+/**
+ * Tick: called every second by setInterval.
+ * Decrements remainingSeconds and checks for completion.
+ */
+function tick() {
+  remainingSeconds -= 1;
+  updateTimerDisplay();
+
+  if (remainingSeconds <= 0) {
+    remainingSeconds = 0;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    timerStatus   = 'finished';
+    applyTimerState('finished');
+    playFinishChime();
+
+    /* Flash the display to celebrate */
+    timerDisplay.classList.add('timer-flash');
+    setTimeout(() => timerDisplay.classList.remove('timer-flash'), 2000);
+  }
+}
+
+/**
+ * Start or resume the countdown.
+ */
+function startTimer() {
+  if (timerStatus === 'finished') return; // must reset first
+
+  timerStatus   = 'running';
+  timerInterval = setInterval(tick, 1000);
+  applyTimerState('running');
+}
+
+/**
+ * Pause the countdown.
+ * Clears the interval but keeps remainingSeconds intact.
+ */
+function pauseTimer() {
+  if (timerStatus !== 'running') return;
+
+  clearInterval(timerInterval);
+  timerInterval = null;
+  timerStatus   = 'paused';
+  applyTimerState('paused');
+}
+
+/**
+ * Reset the timer back to the configured duration.
+ * Works from any state.
+ */
+function resetTimer() {
+  clearInterval(timerInterval);
+  timerInterval    = null;
+  timerStatus      = 'idle';
+  remainingSeconds = totalSeconds;
+  updateTimerDisplay();
+  applyTimerState('idle');
+}
+
+/**
+ * Apply a new custom duration chosen by the user.
+ * Validates the input, updates state, saves to LocalStorage.
+ */
+function setCustomTime() {
+  const raw  = parseInt(customTimeEl.value, 10);
+
+  if (isNaN(raw) || raw < MIN_MINS || raw > MAX_MINS) {
+    showInputError(customTimeEl, `Please enter a number between ${MIN_MINS} and ${MAX_MINS}.`);
+    return;
+  }
+
+  totalSeconds     = raw * 60;
+  savePomodoroMins(raw);
+
+  /* Always reset when duration changes so the new value takes effect */
+  resetTimer();
+}
+
+/* ----------------------------------------------------------
+   Event listeners
+---------------------------------------------------------- */
+
+btnStart.addEventListener('click', startTimer);
+btnPause.addEventListener('click', pauseTimer);
+btnReset.addEventListener('click', resetTimer);
+
+btnSetTime.addEventListener('click', setCustomTime);
+
+/* Also apply on Enter inside the number input */
+customTimeEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') setCustomTime();
+});
+
+/* ----------------------------------------------------------
+   Init
+---------------------------------------------------------- */
+
+/**
+ * Boot the timer module.
+ * Loads saved duration, sets up the initial idle state.
+ */
+function initTimer() {
+  const savedMins      = loadPomodoroMins();
+  totalSeconds         = savedMins * 60;
+  remainingSeconds     = totalSeconds;
+  customTimeEl.value   = savedMins;
+
+  updateTimerDisplay();
+  applyTimerState('idle');
+}
+
+
+/* ==========================================================
+   INIT — runs when the DOM is fully loaded
+========================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();    // M4 — must run first to avoid theme flash
+  initGreeting(); // M3
+  initTodo();     // M5
+  initLinks();    // M6
+  initTimer();    // M7
+});

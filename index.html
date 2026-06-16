@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="To-Do List Life Dashboard — your personal productivity hub">
+    <title>Life Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!--
+      THEME FLASH PREVENTION
+      Reads the saved theme from LocalStorage and applies the
+      'dark' class to <body> synchronously — before any paint.
+      This tiny inline script must stay in <head>, not deferred.
+    -->
+    <script>
+      (function () {
+        var saved = localStorage.getItem('ld_theme');
+        var prefersDark = window.matchMedia &&
+                          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
+          document.documentElement.classList.add('dark-preload');
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+
+    <!-- ================================================
+      HEADER
+      Purpose: App title + theme toggle, always visible at top.
+    ================================================ -->
+    <header class="app-header">
+      <h1 class="app-title">Life Dashboard</h1>
+
+      <button
+        type="button"
+        id="theme-toggle"
+        class="btn-theme-toggle"
+        aria-label="Toggle light and dark mode"
+        title="Toggle theme"
+      >
+        🌙
+      </button>
+    </header>
+
+    <!-- ================================================
+      MAIN CONTENT
+    ================================================ -->
+    <main class="dashboard">
+
+      <!-- TOP ROW: Greeting | Timer | Quick Links -->
+      <div class="dashboard-top">
+
+        <!-- ------------------------------------------
+          GREETING SECTION
+        ------------------------------------------ -->
+        <section id="greeting" class="card card-greeting" aria-label="Greeting and time">
+          <p id="greeting-text" class="greeting-text">Good Morning</p>
+          <p id="clock" class="clock" aria-live="polite" aria-atomic="true">00:00:00</p>
+          <p id="date-display" class="date-display">Monday, 16 June 2026</p>
+        </section>
+
+        <!-- ------------------------------------------
+          FOCUS TIMER SECTION
+        ------------------------------------------ -->
+        <section id="timer" class="card card-timer" aria-label="Focus timer">
+          <h2 class="section-title">Focus Timer</h2>
+
+          <div
+            id="timer-display"
+            class="timer-display"
+            role="timer"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            25:00
+          </div>
+
+          <div class="timer-controls">
+            <button type="button" id="btn-start" class="btn btn-start" aria-label="Start timer">▶ Start</button>
+            <button type="button" id="btn-pause" class="btn btn-pause" aria-label="Pause timer" disabled>⏸ Pause</button>
+            <button type="button" id="btn-reset" class="btn btn-reset" aria-label="Reset timer">↺ Reset</button>
+          </div>
+
+          <div class="timer-settings">
+            <label for="custom-time" class="timer-settings-label">Set minutes:</label>
+            <input
+              type="number"
+              id="custom-time"
+              class="input-custom-time"
+              min="1"
+              max="60"
+              value="25"
+              aria-label="Set custom timer duration in minutes"
+            >
+            <button type="button" id="btn-set-time" class="btn btn-set-time" aria-label="Apply custom time">
+              ⚙ Apply
+            </button>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------
+          QUICK LINKS SECTION
+        ------------------------------------------ -->
+        <section id="quick-links" class="card card-links" aria-label="Quick links">
+          <h2 class="section-title">Quick Links</h2>
+
+          <form id="link-form" class="link-form" novalidate>
+            <input
+              type="text"
+              id="link-label"
+              class="input-text"
+              placeholder="Label (e.g. GitHub)"
+              aria-label="Link label"
+              maxlength="50"
+              required
+            >
+            <input
+              type="url"
+              id="link-url"
+              class="input-text"
+              placeholder="URL (e.g. https://github.com)"
+              aria-label="Link URL"
+              required
+            >
+            <button type="submit" class="btn btn-add">+ Add Link</button>
+          </form>
+
+          <ul id="links-list" class="links-list" role="list" aria-label="Saved quick links">
+            <!-- Rendered by JavaScript -->
+          </ul>
+        </section>
+
+      </div>
+      <!-- END .dashboard-top -->
+
+      <!-- ============================================
+        TO-DO LIST SECTION — full width bottom row
+      ============================================ -->
+      <section id="todo" class="card card-todo" aria-label="To-do list">
+        <h2 class="section-title">To-Do List</h2>
+
+        <form id="todo-form" class="todo-form" novalidate>
+          <input
+            type="text"
+            id="task-input"
+            class="input-text input-task"
+            placeholder="What do you need to do?"
+            aria-label="New task input"
+            maxlength="200"
+            required
+          >
+          <button type="submit" class="btn btn-add">+ Add Task</button>
+        </form>
+
+        <div class="todo-meta">
+          <span id="task-count" class="task-count">0 tasks</span>
+          <div class="todo-filters" role="group" aria-label="Filter tasks by status">
+            <button type="button" class="btn-filter btn-filter-active" data-filter="all"       aria-pressed="true">All</button>
+            <button type="button" class="btn-filter"                   data-filter="active"    aria-pressed="false">Active</button>
+            <button type="button" class="btn-filter"                   data-filter="completed" aria-pressed="false">Completed</button>
+          </div>
+        </div>
+
+        <ul id="task-list" class="task-list" role="list" aria-label="Task list">
+          <!-- Rendered by JavaScript -->
+        </ul>
+
+        <p id="empty-state" class="empty-state" aria-live="polite">
+          No tasks yet. Add one above to get started!
+        </p>
+      </section>
+
+    </main>
+
+    <!-- ================================================
+      FOOTER
+    ================================================ -->
+    <footer class="app-footer">
+      <p>Built by <strong>Dhinar Hidayath</strong> &mdash; RevoU Coding Camp 2026</p>
+    </footer>
+
+    <script src="js/script.js"></script>
+
+  </body>
+</html>

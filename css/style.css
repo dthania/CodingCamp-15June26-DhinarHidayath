@@ -1,0 +1,903 @@
+/* ==========================================================
+   LIFE DASHBOARD — style.css
+   Structure:
+   1. CSS Custom Properties (tokens)
+   2. Reset & Base
+   3. Typography
+   4. Layout — Header, Dashboard, Footer
+   5. Cards (shared)
+   6. Greeting Section
+   7. Focus Timer Section
+   8. Quick Links Section
+   9. To-Do List Section
+  10. Buttons (shared)
+  11. Form Inputs (shared)
+  12. Dark Mode
+  13. Responsive — Tablet (≤900px)
+  14. Responsive — Mobile (≤600px)
+========================================================== */
+
+
+/* ----------------------------------------------------------
+   1. CSS CUSTOM PROPERTIES (Design Tokens)
+   All colours, spacing, and radii are defined here.
+   Swapping themes is just overriding these variables.
+---------------------------------------------------------- */
+:root {
+  /* --- Colour palette --- */
+  --color-bg:           #f0f2f5;
+  --color-surface:      #ffffff;
+  --color-surface-alt:  #f7f8fa;
+  --color-border:       #e2e6ea;
+  --color-shadow:       rgba(0, 0, 0, 0.07);
+
+  --color-text-primary:   #1a1d23;
+  --color-text-secondary: #5a6270;
+  --color-text-muted:     #9aa3af;
+
+  --color-accent:         #4f6ef7;
+  --color-accent-hover:   #3a58e2;
+  --color-accent-light:   #eef1fe;
+
+  --color-success:        #22c55e;
+  --color-success-light:  #f0fdf4;
+  --color-danger:         #ef4444;
+  --color-danger-light:   #fef2f2;
+  --color-warning:        #f59e0b;
+
+  /* --- Greeting card gradient --- */
+  --greeting-gradient: linear-gradient(135deg, #4f6ef7 0%, #7c3aed 100%);
+
+  /* --- Spacing scale --- */
+  --space-xs:   4px;
+  --space-sm:   8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+
+  /* --- Border radius --- */
+  --radius-sm:  6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  /* --- Typography --- */
+  --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-size-xs:   0.75rem;   /* 12px */
+  --font-size-sm:   0.875rem;  /* 14px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-md:   1.125rem;  /* 18px */
+  --font-size-lg:   1.5rem;    /* 24px */
+  --font-size-xl:   2rem;      /* 32px */
+  --font-size-2xl:  3rem;      /* 48px */
+
+  /* --- Transitions --- */
+  --transition-fast:   150ms ease;
+  --transition-normal: 250ms ease;
+}
+
+
+/* ----------------------------------------------------------
+   2. RESET & BASE
+---------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg);
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background-color var(--transition-normal),
+              color var(--transition-normal);
+}
+
+ul {
+  list-style: none;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+
+/* ----------------------------------------------------------
+   3. TYPOGRAPHY
+---------------------------------------------------------- */
+h1, h2, h3 {
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+h2.section-title {
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 2px solid var(--color-border);
+}
+
+
+/* ----------------------------------------------------------
+   4. LAYOUT — Header, Dashboard grid, Footer
+---------------------------------------------------------- */
+
+/* --- Page wrapper padding --- */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-xl);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px var(--color-shadow);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-accent);
+  letter-spacing: -0.5px;
+}
+
+/* Main dashboard area */
+.dashboard {
+  flex: 1;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Top row: 3 equal columns */
+.dashboard-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+/* Footer */
+.app-footer {
+  text-align: center;
+  padding: var(--space-md) var(--space-xl);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+
+/* ----------------------------------------------------------
+   5. CARDS (shared styles for all sections)
+---------------------------------------------------------- */
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: 0 2px 12px var(--color-shadow);
+  transition: box-shadow var(--transition-normal);
+}
+
+.card:hover {
+  box-shadow: 0 4px 20px var(--color-shadow);
+}
+
+
+/* ----------------------------------------------------------
+   6. GREETING SECTION
+---------------------------------------------------------- */
+
+/* Default gradient (set in :root) is morning/afternoon blue-purple.
+   JavaScript sets data-time-of-day on the card each second,
+   allowing the gradient to shift with the actual time of day. */
+#greeting[data-time-of-day="morning"] {
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+}
+
+#greeting[data-time-of-day="afternoon"] {
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+}
+
+#greeting[data-time-of-day="evening"] {
+  background: linear-gradient(135deg, #f97316 0%, #ec4899 100%);
+}
+
+#greeting[data-time-of-day="night"] {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+}
+
+.card-greeting {
+  background: var(--greeting-gradient);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-sm);
+  min-height: 180px;
+  border: none;
+  transition: background var(--transition-normal);
+}
+
+.greeting-text {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.clock {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums; /* prevents layout shift as digits change */
+}
+
+.date-display {
+  font-size: var(--font-size-sm);
+  opacity: 0.85;
+}
+
+
+/* ----------------------------------------------------------
+   7. FOCUS TIMER SECTION
+---------------------------------------------------------- */
+.card-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.timer-display {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+  background-color: var(--color-accent-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-xl);
+  letter-spacing: 3px;
+  width: 100%;
+  text-align: center;
+  transition: background-color var(--transition-normal),
+              color var(--transition-normal);
+}
+
+/* --- Timer card visual states (set by JS via classList) --- */
+
+/* Running: accent ring pulses subtly around the card */
+#timer.timer-running {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light),
+              0 4px 20px var(--color-shadow);
+}
+
+#timer.timer-running .timer-display {
+  color: var(--color-accent);
+  animation: timer-pulse 2s ease-in-out infinite;
+}
+
+/* Paused: warning colour to signal it's waiting */
+#timer.timer-paused {
+  border-color: var(--color-warning);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15),
+              0 4px 20px var(--color-shadow);
+}
+
+#timer.timer-paused .timer-display {
+  color: var(--color-warning);
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+/* Finished: success green — session complete */
+#timer.timer-finished {
+  border-color: var(--color-success);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2),
+              0 4px 20px var(--color-shadow);
+}
+
+#timer.timer-finished .timer-display {
+  color: var(--color-success);
+  background-color: var(--color-success-light);
+}
+
+/* Flash animation played once when the timer hits 00:00 */
+@keyframes timer-flash {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.timer-flash {
+  animation: timer-flash 0.4s ease-in-out 3 !important;
+}
+
+/* Subtle breathing pulse while running */
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.75; }
+}
+
+.timer-controls {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.timer-settings {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.timer-settings-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.input-custom-time {
+  width: 64px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.input-custom-time:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+
+/* ----------------------------------------------------------
+   8. QUICK LINKS SECTION
+---------------------------------------------------------- */
+.card-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.link-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.links-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Individual link item — rendered by JS, styled here */
+.link-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.link-item:hover {
+  background-color: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+
+.link-item a {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link-item a:hover {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.link-item-delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+  line-height: 1;
+}
+
+.link-item-delete:hover {
+  color: var(--color-danger);
+  background-color: var(--color-danger-light);
+}
+
+/* Empty state inside links list */
+.links-empty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--space-md) 0;
+}
+
+
+/* ----------------------------------------------------------
+   9. TO-DO LIST SECTION
+---------------------------------------------------------- */
+.card-todo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.todo-form {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.input-task {
+  flex: 1;
+}
+
+/* Meta row: task count + filter buttons */
+.todo-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.task-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.todo-filters {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.btn-filter {
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-filter:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn-filter-active {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+}
+
+/* Task list */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Individual task item — rendered by JS, styled here */
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast);
+}
+
+.task-item:hover {
+  border-color: var(--color-accent);
+}
+
+.task-item.completed {
+  background-color: var(--color-success-light);
+  border-color: var(--color-success);
+  opacity: 0.75;
+}
+
+/* Custom checkbox */
+.task-checkbox {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--color-success);
+  cursor: pointer;
+}
+
+.task-text {
+  flex: 1;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.task-item.completed .task-text {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+/* Task edit input (shown when editing) */
+.task-edit-input {
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.task-edit-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+/* Task action buttons */
+.task-actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.btn-task {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--color-text-secondary);
+}
+
+.btn-task-edit:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background-color: var(--color-accent-light);
+}
+
+.btn-task-save:hover {
+  border-color: var(--color-success);
+  color: var(--color-success);
+  background-color: var(--color-success-light);
+}
+
+.btn-task-delete:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background-color: var(--color-danger-light);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  padding: var(--space-xl) 0;
+  display: none; /* shown by JS when list is empty */
+}
+
+.empty-state.visible {
+  display: block;
+}
+
+
+/* ----------------------------------------------------------
+   10. BUTTONS (shared)
+---------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--transition-fast),
+              transform var(--transition-fast),
+              opacity var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary / Add */
+.btn-add {
+  background-color: var(--color-accent);
+  color: #ffffff;
+}
+
+.btn-add:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+}
+
+/* Timer buttons */
+.btn-start {
+  background-color: var(--color-success);
+  color: #ffffff;
+  flex: 1;
+}
+
+.btn-start:hover:not(:disabled) {
+  background-color: #16a34a;
+}
+
+.btn-pause {
+  background-color: var(--color-warning);
+  color: #ffffff;
+  flex: 1;
+}
+
+.btn-pause:hover:not(:disabled) {
+  background-color: #d97706;
+}
+
+.btn-reset {
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  flex: 1;
+}
+
+.btn-reset:hover:not(:disabled) {
+  background-color: var(--color-border);
+}
+
+.btn-set-time {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.btn-set-time:hover:not(:disabled) {
+  background-color: var(--color-accent);
+  color: #ffffff;
+}
+
+/* Theme toggle */
+.btn-theme-toggle {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color var(--transition-fast),
+              background-color var(--transition-fast);
+  color: var(--color-text-primary);
+}
+
+.btn-theme-toggle:hover {
+  background-color: var(--color-surface-alt);
+  border-color: var(--color-accent);
+}
+
+
+/* ----------------------------------------------------------
+   11. FORM INPUTS (shared)
+---------------------------------------------------------- */
+.input-text {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-base);
+  font-family: var(--font-family);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast),
+              box-shadow var(--transition-fast);
+}
+
+.input-text::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input-text:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+/* Error state — added by JS on validation fail */
+.input-text.input-error {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-light);
+}
+
+/* Inline error message — injected by JS */
+.error-msg {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  margin-top: calc(-1 * var(--space-xs));
+}
+
+
+/* ----------------------------------------------------------
+   12. DARK MODE
+   Applied by adding class="dark" to <body> via JavaScript.
+   Overrides only the colour tokens — everything else inherits.
+
+   dark-preload is applied to <html> by the inline <head> script
+   before paint to prevent a flash of the wrong theme.
+   Once DOMContentLoaded fires, JS moves it to <body> as "dark".
+---------------------------------------------------------- */
+body.dark,
+html.dark-preload body {
+  --color-bg:           #0f1117;
+  --color-surface:      #1a1d27;
+  --color-surface-alt:  #22263a;
+  --color-border:       #2e3347;
+  --color-shadow:       rgba(0, 0, 0, 0.4);
+
+  --color-text-primary:   #e8eaf0;
+  --color-text-secondary: #9aa3c2;
+  --color-text-muted:     #5c637a;
+
+  --color-accent:         #6b8cff;
+  --color-accent-hover:   #5a7cf0;
+  --color-accent-light:   #1e2340;
+
+  --color-success-light:  #0d2318;
+  --color-danger-light:   #2a0f0f;
+
+  --greeting-gradient: linear-gradient(135deg, #2c3e9e 0%, #4b1f7e 100%);
+}
+
+
+/* ----------------------------------------------------------
+   13. RESPONSIVE — Tablet (≤ 900px)
+   Three-column top row collapses to two columns.
+---------------------------------------------------------- */
+@media (max-width: 900px) {
+  .dashboard {
+    padding: var(--space-lg);
+  }
+
+  .dashboard-top {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Quick links drops to full width on its own row */
+  .card-links {
+    grid-column: 1 / -1;
+  }
+}
+
+
+/* ----------------------------------------------------------
+   14. RESPONSIVE — Mobile (≤ 600px)
+   Everything stacks in a single column.
+---------------------------------------------------------- */
+@media (max-width: 600px) {
+  .app-header {
+    padding: var(--space-md);
+  }
+
+  .app-title {
+    font-size: var(--font-size-base);
+  }
+
+  .dashboard {
+    padding: var(--space-md);
+    gap: var(--space-md);
+  }
+
+  .dashboard-top {
+    grid-template-columns: 1fr;
+  }
+
+  .card-links {
+    grid-column: auto;
+  }
+
+  .clock {
+    font-size: var(--font-size-xl);
+  }
+
+  .timer-display {
+    font-size: var(--font-size-xl);
+  }
+
+  .todo-form {
+    flex-direction: column;
+  }
+
+  .todo-form .btn-add {
+    width: 100%;
+  }
+
+  .todo-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timer-controls {
+    gap: var(--space-xs);
+  }
+}
